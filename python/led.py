@@ -1,22 +1,23 @@
 from __future__ import print_function
 from __future__ import division
 
+import time
 import platform
 import numpy as np
 import config
 
-# ESP8266 uses WiFi communication
-if config.DEVICE == 'esp8266':
+# ESP32 or ESP8266 uses WiFi communication
+if 'esp32' in config.DEVICE or 'esp8266' in config.DEVICE:
     import socket
     _sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # Raspberry Pi controls the LED strip directly
-elif config.DEVICE == 'pi':
+if 'pi' in config.DEVICE:
     import neopixel
     strip = neopixel.Adafruit_NeoPixel(config.N_PIXELS, config.LED_PIN,
                                        config.LED_FREQ_HZ, config.LED_DMA,
                                        config.LED_INVERT, config.BRIGHTNESS)
     strip.begin()
-elif config.DEVICE == 'blinkstick':
+if 'blinkstick' in config.DEVICE:
     from blinkstick import blinkstick
     import signal
     import sys
@@ -41,6 +42,38 @@ pixels = np.tile(1, (3, config.N_PIXELS))
 """Pixel values for the LED strip"""
 
 _is_python_2 = int(platform.python_version_tuple()[0]) == 2
+
+def _update_esp_and_pi():
+    """Sends UDP packets to ESP8266 to update LED strip values and also writes new LED values to the Raspberry Pi's LED strip 
+    """
+    global pixels, _prev_pixels
+    # Truncate values and cast to integer
+    pixels = np.clip(pixels, 0, 255).astype(int)
+    # Optionally apply gamma correc tio
+    p = _gamma[pixels] if config.SOFTWARE_GAMMA_CORRECTION else np.copy(pixels)
+    MAX_PIXELS_PER_PACKET = 126
+    # Pixel indices
+    idx = range(pixels.shape[1])
+    idx = [i for i in idx if not np.array_equal(p[:, i], _prev_pixels[:, i])]
+    n_packets = len(idx) // MAX_PIXELS_PER_PACKET + 1
+    idx = np.array_split(idx, n_packets)
+    for packet_indices in idx:
+        m = '' if _is_python_2 else []
+        for i in packet_indices:
+            if _is_python_2:
+                m += chr(i) + chr(p[0][i]) + chr(p[1][i]) + chr(p[2][i])
+            else:
+                m.append(i)  # Index of pixel to change
+                m.append(p[0][i])  # Pixel red value
+                m.append(p[1][i])  # Pixel green value
+                m.append(p[2][i])  # Pixel blue value
+            strip.setPixelColorRGB(int(i), int(p[0][i]), int(p[1][i]), int(p[2][i]))
+        m = m if _is_python_2 else bytes(m)
+        _sock.sendto(m, (config.UDP_IP, config.UDP_PORT))
+    _prev_pixels = np.copy(p)
+    time.sleep(0.003)
+    strip.show()
+
 
 def _update_esp8266():
     """Sends UDP packets to ESP8266 to update LED strip values
@@ -138,11 +171,17 @@ def _update_blinkstick():
 
 def update():
     """Updates the LED strip values"""
-    if config.DEVICE == 'esp8266':
+    isESP = 'esp32' in config.DEVICE or 'esp8266' in config.DEVICE
+    isPI = 'pi' in config.DEVICE
+    isBS = 'blinkstick' in config.DEVICE
+    
+    if isESP and isPI:
+        _update_esp_and_pi()
+    elif isESP:
         _update_esp8266()
-    elif config.DEVICE == 'pi':
+    elif isPI:
         _update_pi()
-    elif config.DEVICE == 'blinkstick':
+    elif isBS:
         _update_blinkstick()
     else:
         raise ValueError('Invalid device selected')

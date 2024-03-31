@@ -3,9 +3,11 @@ from __future__ import print_function
 from __future__ import division
 import os
 
-DEVICE = 'esp8266'
-#DEVICE = 'pi'
-"""Device used to control LED strip. Must be 'pi',  'esp8266' or 'blinkstick'
+DEVICE = ['esp32', 'pi']
+"""Device used to control LED strip. Must be 'pi', 'esp32',  'esp8266' or 'blinkstick'
+
+'esp32' means that you are using an ESP32 module to control the LED strip
+and commands will be sent to the ESP32 over WiFi.
 
 'esp8266' means that you are using an ESP8266 module to control the LED strip
 and commands will be sent to the ESP8266 over WiFi.
@@ -17,7 +19,15 @@ audio input and control the LED strip directly.
 to control the leds connected to it.
 """
 
-if DEVICE == 'esp8266':
+if 'esp32' in DEVICE:
+    UDP_IP = '192.168.0.150'
+    """IP address of the ESP8266. Must match IP in ws2812_controller.ino"""
+    UDP_PORT = 7777
+    """Port number used for socket communication between Python and ESP8266"""
+    SOFTWARE_GAMMA_CORRECTION = True
+    """Set to False because the firmware handles gamma correction + dither"""
+
+if 'esp8266' in DEVICE:
     UDP_IP = '192.168.0.150'
     """IP address of the ESP8266. Must match IP in ws2812_controller.ino"""
     UDP_PORT = 7777
@@ -25,7 +35,7 @@ if DEVICE == 'esp8266':
     SOFTWARE_GAMMA_CORRECTION = False
     """Set to False because the firmware handles gamma correction + dither"""
 
-if DEVICE == 'pi':
+if 'pi' in DEVICE:
     LED_PIN = 18
     """GPIO pin connected to the LED strip pixels (must support PWM)"""
     LED_FREQ_HZ = 800000
@@ -39,7 +49,7 @@ if DEVICE == 'pi':
     SOFTWARE_GAMMA_CORRECTION = True
     """Set to True because Raspberry Pi doesn't use hardware dithering"""
 
-if DEVICE == 'blinkstick':
+if 'blinkstick' in DEVICE:
     SOFTWARE_GAMMA_CORRECTION = True
     """Set to True because blinkstick doesn't use hardware dithering"""
 
@@ -77,7 +87,7 @@ depends on how long the LED strip is.
 _max_led_FPS = int(((N_PIXELS * 30e-6) + 50e-6)**-1.0)
 assert FPS <= _max_led_FPS, 'FPS must be <= {}'.format(_max_led_FPS)
 
-MIN_FREQUENCY = 200
+MIN_FREQUENCY = 100
 """Frequencies below this value will be removed during audio processing"""
 
 MAX_FREQUENCY = 12000
@@ -101,5 +111,5 @@ There is no point using more bins than there are pixels on the LED strip.
 N_ROLLING_HISTORY = 2
 """Number of past audio frames to include in the rolling window"""
 
-MIN_VOLUME_THRESHOLD = 1e-7
+MIN_VOLUME_THRESHOLD = 1e-1
 """No music visualization displayed if recorded audio volume below threshold"""
